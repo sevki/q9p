@@ -449,21 +449,23 @@ func (e *FileServer) Rwrite(fid protocol.FID, o protocol.Offset, b []byte) (prot
 	return protocol.Count(n), err
 }
 
-type ServerOpt func(*protocol.Server) error
-
-func NewUFS(opts ...protocol.ServerOpt) (*protocol.Server, error) {
-	f := &FileServer{}
-	f.files = make(map[protocol.FID]*file)
-	f.rootPath = *root // for now.
-	// any opts for the ufs layer can be added here too ...
-	var d protocol.NineServer = f
-	if *debug != 0 {
-		d = &debugFileServer{f}
+func NewUFS(opts ...protocol.ListenerOpt) (*protocol.Listener, error) {
+	nsCreator := func() protocol.NineServer {
+		f := &FileServer{}
+		f.files = make(map[protocol.FID]*file)
+		f.rootPath = *root // for now.
+		f.IOunit = 8192
+		// any opts for the ufs layer can be added here too ...
+		var d protocol.NineServer = f
+		if *debug != 0 {
+			d = &debugFileServer{f}
+		}
+		return d
 	}
-	s, err := protocol.NewServer(d, opts...)
+
+	l, err := protocol.NewListener(nsCreator, opts...)
 	if err != nil {
 		return nil, err
 	}
-	f.IOunit = 8192
-	return s, nil
+	return l, nil
 }

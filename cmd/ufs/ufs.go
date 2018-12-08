@@ -9,7 +9,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/Harvey-OS/ninep/filesystem"
+	ufs "github.com/Harvey-OS/ninep/filesystem"
 	"github.com/Harvey-OS/ninep/protocol"
 )
 
@@ -26,12 +26,12 @@ func main() {
 		log.Fatalf("Listen failed: %v", err)
 	}
 
-	s, err := ufs.NewUFS(func(s *protocol.Server) error {
-		s.Trace = nil // log.Printf
+	ufslistener, err := ufs.NewUFS(func(l *protocol.Listener) error {
+		l.Trace = nil // log.Printf
 		return nil
 	})
 
-	if err := s.Serve(ln); err != nil {
+	if err := ufslistener.Serve(ln); err != nil {
 		log.Fatal(err)
 	}
 }

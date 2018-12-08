@@ -17,12 +17,10 @@ import (
 
 const DefaultAddr = ":5640"
 
-// Server is a 9p server.
-// For now it's extremely serial. But we will use a chan for replies to ensure that
-// we can go to a more concurrent one later.
-type Server struct {
-	NS NineServer
-	D  Dispatcher
+type NsCreator func() NineServer
+
+type Listener struct {
+	nsCreator NsCreator
 
 	// TCP address to listen on, default is DefaultAddr
 	Addr string
@@ -36,7 +34,17 @@ type Server struct {
 	listeners map[net.Listener]struct{}
 }
 
+// Server is a 9p server.
+// For now it's extremely serial. But we will use a chan for replies to ensure that
+// we can go to a more concurrent one later.
+type Server struct {
+	NS NineServer
+	D  Dispatcher
+}
+
 type conn struct {
+	listener *Listener
+
 	// server on which the connection arrived.
 	server *Server
 
@@ -53,80 +61,71 @@ type conn struct {
 	dead bool
 }
 
-func NewServer(ns NineServer, opts ...ServerOpt) (*Server, error) {
-	s := &Server{}
-	s.NS = ns
-	s.D = Dispatch
+func NewListener(nsCreator NsCreator, opts ...ListenerOpt) (*Listener, error) {
+	l := &Listener{
+		nsCreator: nsCreator,
+	}
+
 	for _, o := range opts {
-		if err := o(s); err != nil {
+		if err := o(l); err != nil {
 			return nil, err
 		}
 	}
-	return s, nil
+
+	return l, nil
 }
 
-func (s *Server) newConn(rwc net.Conn) *conn {
+func (l *Listener) newConn(rwc net.Conn) (*conn, error) {
+	ns := l.nsCreator()
+	server := &Server{NS: ns, D: Dispatch}
+
 	c := &conn{
-		server:  s,
-		rwc:     rwc,
-		replies: make(chan RPCReply, NumTags),
+		server:   server,
+		listener: l,
+		rwc:      rwc,
+		replies:  make(chan RPCReply, NumTags),
 	}
 
-	return c
+	return c, nil
 }
 
 // trackListener from http.Server
-func (s *Server) trackListener(ln net.Listener, add bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (l *Listener) trackListener(ln net.Listener, add bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-	if s.listeners == nil {
-		s.listeners = make(map[net.Listener]struct{})
+	if l.listeners == nil {
+		l.listeners = make(map[net.Listener]struct{})
 	}
 
 	if add {
-		s.listeners[ln] = struct{}{}
+		l.listeners[ln] = struct{}{}
 	} else {
-		delete(s.listeners, ln)
+		delete(l.listeners, ln)
 	}
 }
 
 // closeListenersLocked from http.Server
-func (s *Server) closeListenersLocked() error {
+func (l *Listener) closeListenersLocked() error {
 	var err error
-	for ln := range s.listeners {
+	for ln := range l.listeners {
 		if cerr := ln.Close(); cerr != nil && err == nil {
 			err = cerr
 		}
-		delete(s.listeners, ln)
+		delete(l.listeners, ln)
 	}
 	return err
 }
 
-// ListenAndServe starts a new Listener on e.Addr and then calls serve.
-func (s *Server) ListenAndServe() error {
-	addr := s.Addr
-	if addr == "" {
-		addr = DefaultAddr
-	}
-
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-
-	return s.Serve(ln)
-}
-
 // Serve accepts incoming connections on the Listener and calls e.Accept on
 // each connection.
-func (s *Server) Serve(ln net.Listener) error {
+func (l *Listener) Serve(ln net.Listener) error {
 	defer ln.Close()
 
 	var tempDelay time.Duration // how long to sleep on accept failure
 
-	s.trackListener(ln, true)
-	defer s.trackListener(ln, false)
+	l.trackListener(ln, true)
+	defer l.trackListener(ln, false)
 
 	// from http.Server.Serve
 	for {
@@ -141,7 +140,7 @@ func (s *Server) Serve(ln net.Listener) error {
 				if max := 1 * time.Second; tempDelay > max {
 					tempDelay = max
 				}
-				s.logf("ufs: Accept error: %v; retrying in %v", err, tempDelay)
+				l.logf("ufs: Accept error: %v; retrying in %v", err, tempDelay)
 				time.Sleep(tempDelay)
 				continue
 			}
@@ -149,7 +148,7 @@ func (s *Server) Serve(ln net.Listener) error {
 		}
 		tempDelay = 0
 
-		if err := s.Accept(conn); err != nil {
+		if err := l.Accept(conn); err != nil {
 			return err
 		}
 	}
@@ -157,8 +156,11 @@ func (s *Server) Serve(ln net.Listener) error {
 
 // Accept a new connection, typically called via Serve but may be called
 // directly if there's a connection from an exotic listener.
-func (s *Server) Accept(conn net.Conn) error {
-	c := s.newConn(conn)
+func (l *Listener) Accept(conn net.Conn) error {
+	c, err := l.newConn(conn)
+	if err != nil {
+		return err
+	}
 
 	go c.serve()
 	return nil
@@ -166,21 +168,21 @@ func (s *Server) Accept(conn net.Conn) error {
 
 // Shutdown closes all active listeners. It does not close all active
 // connections but probably should.
-func (s *Server) Shutdown() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (l *Listener) Shutdown() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-	return s.closeListenersLocked()
+	return l.closeListenersLocked()
 }
 
-func (s *Server) String() string {
+func (l *Listener) String() string {
 	// TODO
 	return ""
 }
 
-func (s *Server) logf(format string, args ...interface{}) {
-	if s.Trace != nil {
-		s.Trace(format, args...)
+func (l *Listener) logf(format string, args ...interface{}) {
+	if l.Trace != nil {
+		l.Trace(format, args...)
 	}
 }
 
@@ -190,7 +192,7 @@ func (c *conn) String() string {
 
 func (c *conn) logf(format string, args ...interface{}) {
 	// prepend some info about the conn
-	c.server.logf("[%v] "+format, append([]interface{}{c.remoteAddr}, args...)...)
+	c.listener.logf("[%v] "+format, append([]interface{}{c.remoteAddr}, args...)...)
 }
 
 func (c *conn) serve() {
@@ -236,10 +238,6 @@ func (c *conn) serve() {
 		}
 		c.logf("Returned %v amt %v", b, amt)
 	}
-}
-
-func (s *Server) NineServer() NineServer {
-	return s.NS
 }
 
 // Dispatch dispatches request to different functions.
