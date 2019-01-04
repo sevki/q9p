@@ -408,6 +408,13 @@ func (e *FileServer) Rread(fid protocol.FID, o protocol.Offset, c protocol.Count
 				return nil, err
 			}
 			protocol.Marshaldir(b, *d9p)
+			// Seen on linux clients: sometimes the math is wrong and
+			// they end up asking for the last element with not enough data.
+			// Linux bug or bug with this server? Not sure yet.
+			if b.Len() > int(c) {
+				log.Printf("Warning: Server bug? %v, need %d bytes;count is %d: skipping", d9p, b.Len(), c)
+				return nil, nil
+			}
 			// We're not quite doing the array right.
 			// What does work is returning one thing so, for now, do that.
 			return b.Bytes(), nil
