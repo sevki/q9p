@@ -6,12 +6,12 @@
 
 // +build windows
 
-package ufs
+package filesystem
 
 import (
 	"os"
 
-	"github.com/Harvey-OS/ninep/protocol"
+	"sevki.org/q9p/protocol"
 )
 
 func fileInfoToQID(d os.FileInfo) protocol.QID {

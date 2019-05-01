@@ -32,7 +32,7 @@ import (
 	"reflect"
 	"text/template"
 
-	"github.com/Harvey-OS/ninep/protocol"
+	"sevki.org/q9p/protocol"
 )
 
 const (

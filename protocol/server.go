@@ -12,6 +12,9 @@ import (
 	"io"
 	"net"
 	"sync"
+
+	quic "github.com/lucas-clemente/quic-go"
+
 	"time"
 )
 
@@ -119,7 +122,7 @@ func (l *Listener) closeListenersLocked() error {
 
 // Serve accepts incoming connections on the Listener and calls e.Accept on
 // each connection.
-func (l *Listener) Serve(ln net.Listener) error {
+func (l *Listener) Serve(ln quic.Listener) error {
 	defer ln.Close()
 
 	var tempDelay time.Duration // how long to sleep on accept failure
@@ -140,7 +143,7 @@ func (l *Listener) Serve(ln net.Listener) error {
 				if max := 1 * time.Second; tempDelay > max {
 					tempDelay = max
 				}
-				l.logf("ufs: Accept error: %v; retrying in %v", err, tempDelay)
+				l.logf("filesystem: Accept error: %v; retrying in %v", err, tempDelay)
 				time.Sleep(tempDelay)
 				continue
 			}

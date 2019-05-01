@@ -1,4 +1,4 @@
-package ufs
+package filesystem
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Harvey-OS/ninep/protocol"
+	"sevki.org/q9p/protocol"
 )
 
 func print(f string, args ...interface{}) {
@@ -18,7 +18,7 @@ func print(f string, args ...interface{}) {
 }
 
 func TestNew(t *testing.T) {
-	n, err := NewUFS()
+	n, err := Newfilesystem()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestMount(t *testing.T) {
 	}
 	t.Logf("Client is %v", c.String())
 
-	n, err := NewUFS(func(s *protocol.Server) error {
+	n, err := Newfilesystem(func(s *protocol.Server) error {
 		s.Trace = print //t.Logf
 		return nil
 	})

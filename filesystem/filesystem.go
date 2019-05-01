@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package ufs
+package filesystem
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Harvey-OS/ninep/protocol"
+	"sevki.org/q9p/protocol"
 )
 
 type file struct {
@@ -280,7 +280,7 @@ func (e *FileServer) Rwstat(fid protocol.FID, b []byte) error {
 		// root of this server.
 		newname := path.Join(path.Dir(f.fullName), path.Join("/", dir.Name))
 
-		// absolute renaming. Ufs can do this, so let's support it.
+		// absolute renaming. filesystem can do this, so let's support it.
 		// We'll allow an absolute path in the Name and, if it is,
 		// we will make it relative to root. This is a gigantic performance
 		// improvement in systems that allow it.
@@ -449,13 +449,13 @@ func (e *FileServer) Rwrite(fid protocol.FID, o protocol.Offset, b []byte) (prot
 	return protocol.Count(n), err
 }
 
-func NewUFS(opts ...protocol.ListenerOpt) (*protocol.Listener, error) {
+func Newfilesystem(opts ...protocol.ListenerOpt) (*protocol.Listener, error) {
 	nsCreator := func() protocol.NineServer {
 		f := &FileServer{}
 		f.files = make(map[protocol.FID]*file)
 		f.rootPath = *root // for now.
 		f.IOunit = 8192
-		// any opts for the ufs layer can be added here too ...
+		// any opts for the filesystem layer can be added here too ...
 		var d protocol.NineServer = f
 		if *debug != 0 {
 			d = &debugFileServer{f}

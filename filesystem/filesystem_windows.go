@@ -6,7 +6,7 @@
 
 // +build windows
 
-package ufs
+package filesystem
 
 import "os"
 

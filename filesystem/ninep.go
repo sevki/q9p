@@ -4,13 +4,13 @@
 // This code is imported from the old ninep repo,
 // with some changes.
 
-package ufs
+package filesystem
 
 import (
 	"flag"
 	"os"
 
-	"github.com/Harvey-OS/ninep/protocol"
+	"sevki.org/q9p/protocol"
 )
 
 var (
